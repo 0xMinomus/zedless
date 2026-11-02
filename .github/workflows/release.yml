@@ -5,6 +5,15 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      linux:
+        description: Build Linux x86_64
+        type: boolean
+        default: true
+      windows:
+        description: Build Windows x86_64
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -12,7 +21,11 @@ permissions:
 jobs:
   linux:
     name: Linux x86_64
-    runs-on: ubuntu-22.04
+    if: github.event_name != 'workflow_dispatch' || inputs.linux
+    runs-on: ubuntu-24.04
+    env:
+      CC: clang
+      CXX: clang++
     timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
@@ -53,6 +66,7 @@ jobs:
 
   windows:
     name: Windows x86_64
+    if: github.event_name != 'workflow_dispatch' || inputs.windows
     runs-on: windows-latest
     timeout-minutes: 180
     env:
