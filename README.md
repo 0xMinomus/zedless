@@ -50,7 +50,8 @@ page cache, one run per app:
 | Metric | Zed 1.26.2 | Zedless 0.1 | Orca 1.4.219 |
 |---|---:|---:|---:|
 | **RAM, idle** | 294 MB | **149 MB** | 756 MB |
-| **CPU, idle** | 0.7 % | 1.6 % | 1.4 % |
+| **CPU, idle** (30 s median) | 0.0 % | **0.0 %** | 0.0 % |
+| CPU, idle (30 s mean) | 0.7 % | 0.9 % | 2.6 % |
 | **RAM, project open** | 297 MB | **150 MB** | —¹ |
 | **CPU, project open** (20 s avg) | 16.0 % | **1.4 %** | —¹ |
 | **Peak CPU during launch** | 235 % | **12 %** | 346 % |
@@ -64,9 +65,14 @@ How to read this:
   not just its main process. Idle is measured 10 s after launch; project is
   `~/Documents/Alpro` opened for 20 s. Values are cold-page-cache, so warm runs
   may read 10–18 MB higher.
-- **CPU** is the average share of *one logical core*. It can exceed 100 % when
-  an app uses several threads. Samples are taken every 0.5 s; *peak* is the
-  highest sample during launch.
+- **CPU** is the share of *one logical core*; it can exceed 100 % when an app
+  uses several threads. Idle is reported both as median and mean over 30 s:
+  a median of 0.0 % for all three apps means they sleep most of the time and
+  wake only for short timers, so the mean is dominated by those bursts. Under
+  load the difference is real: Zedless uses ~1.4 % versus Zed's 16 %.
+- **Peak CPU** is the highest 0.5 s sample during launch. Zed and Orca spike
+  while compiling shaders and starting service processes; Zedless starts one
+  process and stays near idle.
 - Zed's crash-helper process is included in its RAM total. Language servers run
   as separate processes and are not counted for any app.
 - Orca has no CLI argument for opening a folder, so its project row is not
@@ -74,9 +80,11 @@ How to read this:
   extracted AppImage with its whole Electron process tree summed: main 352 MB,
   renderer 207 MB, GPU 181 MB, network service 88 MB, three zygotes ~132 MB.
 
-Zedless is **~2× lighter than Zed** in RAM and CPU during project work, and
-**~5× lighter than Orca** at idle (~6.5× at Orca's launch plateau). Reproduce
-with `script/zedless-mem`; CPU numbers require a process-tree sampler.
+Zedless has the **lowest CPU under project work (1.4 % vs 16 %) and the lowest
+launch spike (12 % vs 235 % / 346 %)**, and is **~2× lighter than Zed** in RAM.
+It is also **~5× lighter than Orca** at idle (~6.5× at Orca's launch plateau).
+Reproduce RAM with `script/zedless-mem`; CPU numbers require a process-tree
+sampler.
 
 ### Known limitations
 
