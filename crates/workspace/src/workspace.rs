@@ -13047,7 +13047,7 @@ mod tests {
             });
         });
         cx.executor().run_until_parked();
-        assert_eq!(cx.window_title().as_deref(), Some("empty project"));
+        assert_eq!(cx.window_title().as_deref(), Some("Zedless"));
     }
 
     #[gpui::test]
