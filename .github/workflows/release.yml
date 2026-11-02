@@ -1,0 +1,107 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    name: Linux x86_64
+    runs-on: ubuntu-22.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.98.1
+      - name: Install system dependencies
+        run: ./script/linux
+      - name: Ensure llvm-objcopy is on PATH
+        run: |
+          if ! command -v llvm-objcopy >/dev/null; then
+            objcopy=$(ls /usr/bin/llvm-objcopy-* 2>/dev/null | head -1)
+            sudo ln -sf "$objcopy" /usr/local/bin/llvm-objcopy
+          fi
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        env:
+          JOBS: "4"
+        run: script/zedless-build
+      - name: Package
+        run: |
+          set -euo pipefail
+          out=dist/zedless-linux-x86_64
+          mkdir -p "$out"
+          cp target/release/zedless "$out/"
+          cp packaging/install.sh "$out/"
+          cp assets/zedless-512.png "$out/zedless.png"
+          cp LICENSE LICENSE-GPL LICENSE-APACHE NOTICE README.md "$out/"
+          tar -C dist -czf zedless-linux-x86_64.tar.gz zedless-linux-x86_64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: zedless-linux-x86_64.tar.gz
+
+  windows:
+    name: Windows x86_64
+    runs-on: windows-latest
+    timeout-minutes: 180
+    env:
+      CARGO_PROFILE_RELEASE_DEBUG: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.98.1
+      - name: Install protoc and nasm
+        run: choco install protoc nasm -y --no-progress
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --release -p zed --bin zedless
+      - name: Package
+        shell: pwsh
+        run: |
+          $out = "dist/zedless-windows-x86_64"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          Copy-Item target/release/zedless.exe $out
+          Get-ChildItem target/release -Filter *.dll -ErrorAction SilentlyContinue |
+            Copy-Item -Destination $out
+          Copy-Item LICENSE,LICENSE-GPL,LICENSE-APACHE,NOTICE,README.md $out
+          @"
+          Zedless portable build for Windows x86_64.
+
+          Run zedless.exe. Settings live in %APPDATA%\Zedless.
+          This build is unsigned: verify the release SHA-256 before running.
+          License: GPL-3.0-or-later. Unofficial fork of Zed.
+          "@ | Set-Content "$out/README.txt"
+          Compress-Archive -Path $out -DestinationPath zedless-windows-x86_64.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: zedless-windows-x86_64.zip
+
+  publish:
+    name: Publish release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [linux, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - name: Checksums
+        run: sha256sum zedless-*.tar.gz zedless-*.zip > SHA256SUMS.txt
+      - uses: softprops/action-gh-release@v2
+        with:
+          body_path: RELEASE_NOTES.md
+          files: |
+            zedless-linux-x86_64.tar.gz
+            zedless-windows-x86_64.zip
+            SHA256SUMS.txt
+          draft: false
+          prerelease: false

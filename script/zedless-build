@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Build the shipped Zedless binary with Zed's bundle settings:
+# size-optimized release profile, addrsig, LLD with safe ICF, stripped output.
+# Usage: script/zedless-build
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+jobs=${JOBS:-6}
+cc=${CC:-clang}
+lld=${LLD:-/usr/bin/ld.lld}
+
+# No debuginfo in release artifacts: keeps target/ small (the binary is
+# stripped anyway) and leaves room for incremental builds.
+export CARGO_PROFILE_RELEASE_DEBUG=0
+
+nice -n 19 ionice -c 3 cargo --config .cargo/bundle-config.toml rustc \
+  --release -j "$jobs" --package zed --bin zedless -- \
+  -C "linker=$cc" \
+  -C "llvm-args=-addrsig" \
+  -C "link-arg=-fuse-ld=lld" \
+  -C "link-arg=-Wl,--icf=safe"
+
+bin=target/release/zedless
+llvm-objcopy --only-keep-debug "$bin" "$bin.dbg"
+llvm-objcopy --strip-unneeded "$bin"
+ls -lh "$bin"

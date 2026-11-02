@@ -1,0 +1,46 @@
+Zedless
+=======
+
+Copyright (C) 2026 0xMinomus and Zedless contributors.
+
+This product is a fork of Zed.
+
+Upstream project: https://github.com/zed-industries/zed
+Upstream tag:      v1.26.2
+Upstream commit:   c4273271092b0287f7d181f616bd5171e0a2f70c
+Upstream license:  GPL-3.0-or-later (see LICENSE-GPL, LICENSE-APACHE)
+
+Zed is Copyright (C) Zed Industries, Inc. and its contributors.
+
+Modifications in Zedless
+------------------------
+
+Zedless is derived from the upstream source above and is distributed under the
+same license. The following categories of changes were made:
+
+- Product identity: Zedless name, application id, config/data directories,
+  icons and window titles.
+- Removed or disabled: agent panel and sidebar, ACP tools, AI providers,
+  Copilot, inline assist, edit prediction, web search, collaboration panel,
+  calls/channels UI, feedback UI, crash reporter sidecar, telemetry upload,
+  upstream auto-updater, onboarding flow, extension auto-install and store
+  surfaces, collaboration settings pages, sign-in and profile UI.
+- Added: Linux build/install scripts, memory benchmark script, release
+  packaging and documentation.
+- Changed defaults: local-only operation, Vulkan-only rendering on Linux and
+  Vulkan ICD restriction to the primary GPU.
+
+No warranty
+-----------
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+Trademarks
+----------
+
+“Zed” and the Zed logo are trademarks of Zed Industries, Inc. Zedless is an
+independent, unofficial fork and is not affiliated with, endorsed by, or
+sponsored by Zed Industries. The Zedless name and logo identify this project
+only.

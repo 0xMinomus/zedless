@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# Install Zedless into the user's XDG directories (~/.local by default).
+# Usage: script/zedless-install
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+bin=${BIN:-target/release/zedless}
+prefix=${PREFIX:-$HOME/.local}
+libdir=$prefix/lib/zedless
+bindir=$prefix/bin
+appdir=$prefix/share/applications
+icondir=$prefix/share/icons/hicolor/512x512/apps
+
+[[ -x $bin ]] || { echo "missing $bin; run script/zedless-build first" >&2; exit 1; }
+
+install -d "$libdir" "$bindir" "$appdir" "$icondir"
+install -m755 "$bin" "$libdir/zedless"
+install -m644 assets/zedless-512.png "$icondir/zedless.png"
+
+cat > "$bindir/zedless" <<EOF
+#!/usr/bin/env bash
+exec "$libdir/zedless" "\$@"
+EOF
+chmod 755 "$bindir/zedless"
+
+cat > "$appdir/dev.zedless.Zedless.desktop" <<EOF
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Zedless
+GenericName=Text Editor
+Comment=Lightweight Zed fork for local coding and vibecoding
+TryExec=$bindir/zedless
+Exec=$bindir/zedless %F
+Icon=zedless
+Terminal=false
+StartupNotify=true
+StartupWMClass=dev.zedless.Zedless
+Categories=Utility;TextEditor;Development;IDE;
+MimeType=text/plain;application/x-zerosize;
+EOF
+
+if command -v desktop-file-validate >/dev/null; then
+  desktop-file-validate "$appdir/dev.zedless.Zedless.desktop"
+fi
+if command -v update-desktop-database >/dev/null; then
+  update-desktop-database "$appdir" >/dev/null 2>&1 || true
+fi
+if command -v gtk-update-icon-cache >/dev/null; then
+  gtk-update-icon-cache -q -t "$prefix/share/icons/hicolor" >/dev/null 2>&1 || true
+fi
+
+echo "binary   $libdir/zedless"
+echo "launcher $bindir/zedless"
+echo "desktop  $appdir/dev.zedless.Zedless.desktop"

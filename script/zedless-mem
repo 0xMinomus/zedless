@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Measure idle memory of a Zed/Zedless binary in an isolated profile.
+# Usage: script/zedless-mem <binary> [wait-seconds]
+set -euo pipefail
+
+bin=$(readlink -f "${1:?usage: $0 <binary> [wait-seconds]}")
+wait_s=${2:-10}
+work=$(mktemp -d)
+trap 'kill "$pid" 2>/dev/null || true; rm -rf "$work"' EXIT
+mkdir -p "$work"/{cfg,data,cache,proj}
+
+XDG_CONFIG_HOME="$work/cfg" XDG_DATA_HOME="$work/data" XDG_CACHE_HOME="$work/cache" \
+  "$bin" "$work/proj" >/dev/null 2>&1 &
+pid=$!
+
+sleep "$wait_s"
+if ! kill -0 "$pid" 2>/dev/null; then
+  echo "process exited before measurement" >&2
+  exit 1
+fi
+
+mem() { awk -v k="$2" '$1==k":"{s+=$2} END{printf "%.1f", s/1024}' "/proc/$1/smaps_rollup"; }
+echo "binary: $bin"
+printf 'main   pid=%s rss=%sMB pss=%sMB\n' "$pid" "$(mem "$pid" Rss)" "$(mem "$pid" Pss)"
+total=$(mem "$pid" Rss)
+for child in $(pgrep -P "$pid" || true); do
+  printf 'child  pid=%s %s rss=%sMB\n' "$child" "$(tr -d '\0' <"/proc/$child/comm")" "$(mem "$child" Rss)"
+  total=$(awk -v a="$total" -v b="$(mem "$child" Rss)" 'BEGIN{print a+b}')
+done
+printf 'total  rss=%.1fMB\n' "$total"
