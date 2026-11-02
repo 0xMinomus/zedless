@@ -1,8 +1,10 @@
 [profile.release]
 opt-level = "z"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
 
 [profile.release.package]
-"*" = { opt-level = 3 }
 cli = { opt-level = 3 }
 editor = { opt-level = 3 }
 gpui = { opt-level = 3 }

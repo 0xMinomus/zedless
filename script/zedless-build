@@ -18,6 +18,7 @@ nice -n 19 ionice -c 3 cargo --config .cargo/bundle-config.toml rustc \
   -C "linker=$cc" \
   -C "llvm-args=-addrsig" \
   -C "link-arg=-fuse-ld=lld" \
+  -C "link-arg=-Wl,--gc-sections" \
   -C "link-arg=-Wl,--icf=safe"
 
 bin=target/release/zedless

@@ -1862,6 +1862,12 @@ impl PlatformWindow for WaylandWindow {
         let state = self.borrow();
         if let (Some(activation), Some(app_id)) = (&state.globals.activation, state.app_id.clone())
         {
+            // One in-flight activation token is enough: requesting a second one
+            // overwrites the pending activation and leaves the compositor's
+            // launch feedback (the busy cursor) spinning until it times out.
+            if state.client.has_pending_activation() {
+                return;
+            }
             state.client.set_pending_activation(state.surface.id());
             let token = activation.get_activation_token(&state.globals.qh, ());
             // The serial isn't exactly important here, since the activation is probably going to be rejected anyway.

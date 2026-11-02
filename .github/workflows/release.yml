@@ -26,7 +26,7 @@ jobs:
     env:
       CC: clang
       CXX: clang++
-    timeout-minutes: 150
+    timeout-minutes: 240
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -68,7 +68,7 @@ jobs:
     name: Windows x86_64
     if: github.event_name != 'workflow_dispatch' || inputs.windows
     runs-on: windows-latest
-    timeout-minutes: 180
+    timeout-minutes: 300
     env:
       CARGO_PROFILE_RELEASE_DEBUG: "0"
     steps:
@@ -80,7 +80,7 @@ jobs:
         run: choco install protoc nasm -y --no-progress
       - uses: Swatinem/rust-cache@v2
       - name: Build
-        run: cargo build --release -p zed --bin zedless
+        run: cargo build --release --config .cargo/bundle-config.toml -p zed --bin zedless
       - name: Package
         shell: pwsh
         run: |

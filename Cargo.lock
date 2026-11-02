@@ -18503,7 +18503,6 @@ dependencies = [
  "arrayvec",
  "auto_update",
  "call",
- "channel",
  "chrono",
  "client",
  "cloud_api_types",
@@ -18513,7 +18512,6 @@ dependencies = [
  "git_ui_core",
  "gpui",
  "icons",
- "livekit_client",
  "platform_title_bar",
  "project",
  "recent_projects",
@@ -22546,7 +22544,7 @@ dependencies = [
 
 [[package]]
 name = "zed"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "action_log",
  "activity_indicator",
@@ -22617,6 +22615,7 @@ dependencies = [
  "language_selector",
  "language_tools",
  "languages",
+ "libc",
  "line_ending_selector",
  "log",
  "lsp_command_selector",

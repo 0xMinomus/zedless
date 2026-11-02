@@ -9121,8 +9121,8 @@ fn project_window_title(project: &Project, cx: &App) -> String {
     }
 
     if title.is_empty() {
-        // Keep the default untitled-window text instead of showing a blank title.
-        "empty project".to_string()
+        // zedless: welcome screen, not an "empty project".
+        "Zedless".to_string()
     } else {
         title
     }

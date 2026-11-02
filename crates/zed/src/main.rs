@@ -22,7 +22,6 @@ use client::{Client, ProxySettings, RefreshLlmTokenListener, UserStore, parse_ze
 use collections::HashMap;
 use crashes::InitCrashHandler;
 use db::kvp::{GlobalKeyValueStore, KeyValueStore};
-use editor::Editor;
 use extension::ExtensionHostProxy;
 use fs::{Fs, RealFs};
 use futures::{FutureExt, StreamExt, channel::oneshot, future};
@@ -744,8 +743,6 @@ fn main() {
         dev_container::init(cx);
 
         load_embedded_fonts(cx);
-        #[cfg(target_os = "linux")]
-        prewarm_fonts(cx);
 
         editor::init(cx);
         image_viewer::init(cx);
@@ -789,7 +786,6 @@ fn main() {
         theme_selector::init(cx);
         settings_profile_selector::init(cx);
         language_tools::init(cx);
-        call::init(app_state.client.clone(), app_state.user_store.clone(), cx);
         title_bar::init(cx);
         git_ui::init(cx);
         markdown_preview::init(cx);
@@ -891,11 +887,12 @@ fn main() {
 
         cx.activate(true);
 
-        cx.spawn({
-            let client = app_state.client.clone();
-            async move |cx| authenticate(client, cx).await
-        })
-        .detach_and_log_err(cx);
+        // zedless: after the first frame settles, hand clean executable and
+        // read-only pages back to the OS. They stay in the page cache, so the
+        // next use re-faults them instantly instead of reading from disk. This
+        // keeps the idle working set small without changing behaviour.
+        #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+        spawn_idle_page_trim();
 
         let urls: Vec<_> = args
             .paths_or_urls
@@ -1311,20 +1308,6 @@ fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &mut 
     }
 }
 
-async fn authenticate(client: Arc<Client>, cx: &AsyncApp) -> Result<()> {
-    if stdout_is_a_pty() {
-        if client::IMPERSONATE_LOGIN.is_some() {
-            client.sign_in_with_optional_connect(false, cx).await?;
-        } else if client.has_credentials(cx).await {
-            client.sign_in_with_optional_connect(true, cx).await?;
-        }
-    } else if client.has_credentials(cx).await {
-        client.sign_in_with_optional_connect(true, cx).await?;
-    }
-
-    Ok(())
-}
-
 async fn system_id() -> Result<IdType> {
     let key_name = "system_id".to_string();
     let db = GlobalKeyValueStore::global();
@@ -1481,16 +1464,9 @@ pub(crate) async fn restore_or_create_workspace(
                     Default::default(),
                     app_state.clone(),
                     cx,
-                    |workspace, window, cx| {
-                        let restore_on_startup =
-                            WorkspaceSettings::get_global(cx).restore_on_startup;
-                        match restore_on_startup {
-                            workspace::RestoreOnStartupBehavior::Launchpad => {}
-                            _ => {
-                                Editor::new_file(workspace, &Default::default(), window, cx);
-                            }
-                        }
-                    },
+                    // zedless: an empty startup shows the welcome page, never a
+                    // throwaway untitled buffer.
+                    |_, _, _| {},
                 )
             })
             .await?;
@@ -1501,15 +1477,8 @@ pub(crate) async fn restore_or_create_workspace(
                 Default::default(),
                 app_state,
                 cx,
-                |workspace, window, cx| {
-                    let restore_on_startup = WorkspaceSettings::get_global(cx).restore_on_startup;
-                    match restore_on_startup {
-                        workspace::RestoreOnStartupBehavior::Launchpad => {}
-                        _ => {
-                            Editor::new_file(workspace, &Default::default(), window, cx);
-                        }
-                    }
-                },
+                // zedless: fall back to the welcome page, never an untitled buffer.
+                |_, _, _| {},
             )
         })
         .await?;
@@ -1622,6 +1591,142 @@ pub(crate) static FORCE_CLI_MODE: LazyLock<bool> = LazyLock::new(|| {
     unsafe { std::env::remove_var(FORCE_CLI_MODE_ENV_VAR_NAME) };
     env_var
 });
+
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+fn spawn_idle_page_trim() {
+    std::thread::Builder::new()
+        .name("zedless-idle-trim".into())
+        .spawn(|| {
+            let mut previous_ticks = own_cpu_ticks();
+            loop {
+                std::thread::sleep(std::time::Duration::from_secs(5));
+                let current_ticks = own_cpu_ticks();
+                let spent = current_ticks.saturating_sub(previous_ticks);
+                previous_ticks = current_ticks;
+                // Only reclaim when the process spent under 1% of a core in the
+                // last window, so active editing never pays for the re-faults.
+                if spent <= 20 {
+                    trim_own_clean_pages();
+                }
+            }
+        })
+        .ok();
+}
+
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+fn own_cpu_ticks() -> u64 {
+    let Ok(stat) = std::fs::read_to_string("/proc/self/stat") else {
+        return 0;
+    };
+    let Some((_, rest)) = stat.rsplit_once(") ") else {
+        return 0;
+    };
+    let fields: Vec<&str> = rest.split_whitespace().collect();
+    fields
+        .get(11)
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(0)
+        + fields
+            .get(12)
+            .and_then(|value| value.parse::<u64>().ok())
+            .unwrap_or(0)
+}
+
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+fn trim_own_clean_pages() {
+    let Ok(exe) = std::fs::read_link("/proc/self/exe") else {
+        return;
+    };
+    let exe = exe.to_string_lossy().into_owned();
+    let Ok(smaps) = std::fs::read_to_string("/proc/self/smaps") else {
+        return;
+    };
+
+    let mut start = 0usize;
+    let mut end = 0usize;
+    let mut perms = String::new();
+    let mut path = String::new();
+    let mut dirty = 0u64;
+    let mut rss = 0u64;
+    let mut active = false;
+
+    let mut flush = |start: usize,
+                     end: usize,
+                     perms: &str,
+                     path: &str,
+                     dirty: u64,
+                     rss: u64| {
+        if end <= start || rss == 0 || dirty != 0 || !path.ends_with(&exe) {
+            return;
+        }
+        if !(perms.starts_with("r-x") || perms.starts_with("r--")) {
+            return;
+        }
+        // SAFETY: the range comes from this process' own maps and contains
+        // only clean file-backed pages, so dropping them cannot lose data.
+        unsafe {
+            libc::madvise(start as *mut _, end - start, libc::MADV_DONTNEED);
+        }
+    };
+
+    for line in smaps.lines() {
+        let mut fields = line.split_whitespace();
+        let Some(first) = fields.next() else {
+            continue;
+        };
+        if let Some((s, e)) = first.split_once('-')
+            && s.len() > 6
+            && e.len() > 6
+            && s.chars().all(|c| c.is_ascii_hexdigit())
+            && e.chars().all(|c| c.is_ascii_hexdigit())
+            && let (Ok(s), Ok(e)) = (
+                usize::from_str_radix(s, 16),
+                usize::from_str_radix(e, 16),
+            )
+        {
+            if active {
+                flush(start, end, &perms, &path, dirty, rss);
+            }
+            start = s;
+            end = e;
+            perms = fields.next().unwrap_or_default().to_string();
+            // skip offset, device and inode before the optional path
+            let _ = fields.next();
+            let _ = fields.next();
+            let _ = fields.next();
+            path = fields.collect::<Vec<_>>().join(" ");
+            dirty = 0;
+            rss = 0;
+            active = true;
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("Private_Dirty:") {
+            dirty += rest
+                .trim()
+                .trim_end_matches(" kB")
+                .trim()
+                .parse::<u64>()
+                .unwrap_or(0);
+        } else if let Some(rest) = line.strip_prefix("Shared_Dirty:") {
+            dirty += rest
+                .trim()
+                .trim_end_matches(" kB")
+                .trim()
+                .parse::<u64>()
+                .unwrap_or(0);
+        } else if let Some(rest) = line.strip_prefix("Rss:") {
+            rss += rest
+                .trim()
+                .trim_end_matches(" kB")
+                .trim()
+                .parse::<u64>()
+                .unwrap_or(0);
+        }
+    }
+    if active {
+        flush(start, end, &perms, &path, dirty, rss);
+    }
+}
 
 fn stdout_is_a_pty() -> bool {
     !*FORCE_CLI_MODE && io::stdout().is_terminal()

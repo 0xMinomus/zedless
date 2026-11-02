@@ -702,6 +702,12 @@ impl WaylandClientStatePtr {
             Some(PendingActivation::Window(window));
     }
 
+    pub fn has_pending_activation(&self) -> bool {
+        self.0
+            .upgrade()
+            .is_some_and(|state| state.borrow().pending_activation.is_some())
+    }
+
     pub fn enable_ime(&self) {
         let client = self.get_client();
         let mut state = client.borrow_mut();

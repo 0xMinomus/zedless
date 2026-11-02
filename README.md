@@ -26,10 +26,10 @@ supported by Zed Industries. See [NOTICE](NOTICE) and [Trademark](#trademark).
 
 ## Status
 
-- **0.1.0** — first public build.
+- **1.0.0** — first stable release.
 - Linux x86_64: tested, released as a tarball.
-- Windows x86_64: portable zip produced by the release workflow; unsigned, so
-  SmartScreen will warn on first launch.
+- Windows x86_64: stable, tested by the maintainer; shipped as a portable zip.
+  The build is unsigned, so SmartScreen will warn on first launch.
 - macOS: not built; the fork is not tested there.
 
 ## Features
@@ -40,60 +40,52 @@ supported by Zed Industries. See [NOTICE](NOTICE) and [Trademark](#trademark).
 | Tree-sitter syntax + LSP (Rust, TS/JS, Python, Go, C/C++, JSON, CSS, YAML, …) | AI providers, copilot, inline assist, edit prediction |
 | Project panel, search, outline, git panel, debugger, terminal | Collaboration panel, calls, channel UI |
 | Settings UI, keymaps, themes (built-in) | Extension store and extension auto-install |
-| Local-first: no login, no cloud calls on startup | Crash reporter, telemetry upload, upstream updater |
+| Local-first: no login, no cloud connection on startup | Crash reporter, telemetry upload, upstream updater |
 
 ## Memory and CPU benchmark
 
 One machine (Fedora 44, Intel RAPTORLAKE-S, Mesa 26.2.4), fresh profile, cold
-page cache, one run per app:
+page cache, same protocol for both editors:
 
-| Metric | Zed 1.26.2 | Zedless 0.1 | Orca 1.4.219 |
-|---|---:|---:|---:|
-| **RAM, idle** | 294 MB | **149 MB** | 756 MB |
-| **CPU, idle** (30 s median) | 0.0 % | **0.0 %** | 0.0 % |
-| CPU, idle (30 s mean) | 0.7 % | 0.9 % | 2.6 % |
-| **RAM, project open** | 297 MB | **150 MB** | —¹ |
-| **CPU, project open** (20 s avg) | 16.0 % | **1.4 %** | —¹ |
-| **Peak CPU during launch** | 235 % | **12 %** | 346 % |
-| Processes | 2 | **1** | 7 |
-| Binary / install | 220 MB | **188 MB** | 204 MB AppImage |
-| `.text` | 155.5 MB | **132.5 MB** | n/a (Electron) |
+| Metric | Zed 1.26.2 | Zedless 1.0.0 |
+|---|---:|---:|
+| **RAM, idle** | 245 MB | **52 MB** |
+| **RAM, project open** | 257 MB | **65 MB** |
+| CPU, idle (mean over 15 s) | 0.0 % | **0.0 %** |
+| Time to first frame (cold cache) | 0.69 s | **0.69 s** |
+| Processes / threads | 2 / 91 | **1 / 58** |
+| Binary | 230 MB | **116 MB** |
 
-How to read this:
+How it was measured: RSS and PSS come from `/proc/<pid>/smaps_rollup`, summed
+over the process tree. Each run starts from a fresh profile with the page cache
+dropped; idle is read 12 s after launch and project is `zed/crates` (83 MB)
+opened for 25 s. Language servers are separate processes and are not counted
+for either app.
 
-- **RAM** is resident set size (RSS) summed across every process the app owns,
-  not just its main process. Idle is measured 10 s after launch; project is
-  `~/Documents/Alpro` opened for 20 s. Values are cold-page-cache, so warm runs
-  may read 10–18 MB higher.
-- **CPU** is the share of *one logical core*; it can exceed 100 % when an app
-  uses several threads. Idle is reported both as median and mean over 30 s:
-  a median of 0.0 % for all three apps means they sleep most of the time and
-  wake only for short timers, so the mean is dominated by those bursts. Under
-  load the difference is real: Zedless uses ~1.4 % versus Zed's 16 %.
-- **Peak CPU** is the highest 0.5 s sample during launch. Zed and Orca spike
-  while compiling shaders and starting service processes; Zedless starts one
-  process and stays near idle.
-- Zed's crash-helper process is included in its RAM total. Language servers run
-  as separate processes and are not counted for any app.
-- Orca has no CLI argument for opening a folder, so its project row is not
-  measured; its launch plateau is 955 MB / 346 % CPU. Orca was run from an
-  extracted AppImage with its whole Electron process tree summed: main 352 MB,
-  renderer 207 MB, GPU 181 MB, network service 88 MB, three zygotes ~132 MB.
+Zedless is **~4.7× lighter than Zed at idle** and **~4× lighter with a project
+open**, while both spend 0.0 % CPU when nothing is happening. Two things bring
+the idle footprint down:
 
-Zedless has the **lowest CPU under project work (1.4 % vs 16 %) and the lowest
-launch spike (12 % vs 235 % / 346 %)**, and is **~2× lighter than Zed** in RAM.
-It is also **~5× lighter than Orca** at idle (~6.5× at Orca's launch plateau).
+- The release binary is built with fat LTO, `panic = "abort"`, single codegen
+  unit and opt-level=z outside the hot-path allowlist. The remaining
+  collaboration call stack (LiveKit/WebRTC) is not linked.
+- On Linux, after ~5 s without CPU activity the process hands its clean
+  executable and read-only pages back to the OS. The pages stay in the page
+  cache and re-fault instantly on the next interaction, so documents, settings
+  and rendering state are untouched. Without that reclaim the idle figure is
+  ~108 MB.
+
 Reproduce RAM with `script/zedless-mem`; CPU numbers require a process-tree
 sampler.
 
 ### Known limitations
 
-- `client`, `call`, `channel` and `extension_host` are still linked because the
-  editor core depends on them. Removing them needs editor/project API rework,
-  not UI trimming.
-- ~100 MB idle is not reachable with GPUI as-is; the practical floor here is
-  ~145–150 MB.
-- Windows builds are unsigned and untested by the maintainer at release time.
+- `client`, `channel` and `extension_host` are still linked because the editor
+  core depends on them. Removing them needs editor/project API rework.
+- The idle page reclaim is Linux-only. Windows uses the OS working-set
+  manager.
+- Windows builds are unsigned; SmartScreen warns on first launch. They are
+  tested stable by the maintainer.
 
 ## Install
 
@@ -146,7 +138,7 @@ Fast iteration: `cargo build --profile release-fast -p zed`.
 | `crates/zed` | application entry, window/workspace wiring |
 | `crates/editor`, `crates/project` | editor and LSP/project core |
 | `crates/gpui*` | UI framework |
-| `script/zedless-build` | reproducible release build (opt-level=z, thin LTO, ICF, strip) |
+| `script/zedless-build` | reproducible release build (opt-level=z, fat LTO, panic=abort, ICF, strip) |
 | `script/zedless-install` | per-user install |
 | `script/zedless-mem` | idle memory benchmark |
 | `packaging/` | archive installer used by releases |

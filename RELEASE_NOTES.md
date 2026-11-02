@@ -1,7 +1,7 @@
-## Zedless 0.1.0
+## Zedless 1.0.0
 
-A lightweight, local-first fork of Zed. No account, no agent panel, no
-extension store, no telemetry.
+First stable release. No account, no agent panel, no extension store, no
+telemetry — now with Zedless branding everywhere and a lower memory floor.
 
 ### Downloads
 
@@ -30,20 +30,24 @@ running.
 
 ### Highlights
 
-- Editor core, LSP, tree-sitter, terminal, git, debugger and project search kept.
-- Agent panel, AI providers, Copilot, edit prediction, collaboration UI,
-  extension store, onboarding, crash reporter, telemetry and upstream updater
-  removed.
-- ~2× lighter than Zed on the same workload: 148 MB idle versus 294 MB
-  (measured on one Fedora 44 / Intel machine, cold page cache).
-- Own application id, config/data directories, logo and desktop entry.
+- Transparent Zedless logo in the welcome screen; Zedless icons on Linux and
+  Windows and Zedless product strings in the Windows executable.
+- Fresh installs open the welcome page instead of a throwaway untitled buffer.
+- Size-oriented release build: fat LTO, `panic = "abort"`, single codegen unit,
+  opt-level=z outside the hot-path allowlist. Editor, terminal, LSP,
+  tree-sitter, git, debugger and project search are unchanged.
+- Removed the remaining collaboration call stack (LiveKit/WebRTC) from the
+  app binary.
+- Linux desktop entries no longer request startup notification and duplicate
+  activation-token requests were fixed, so the launcher no longer shows a long
+  loading cursor.
+- Measured RAM, CPU and startup numbers are in the README benchmark table.
 
 ### Known limitations
 
-- `client`, `call`, `channel` and `extension_host` are still linked to the
-  editor core; removing them requires API rework.
-- Idle memory floor is ~147 MB with GPUI; 100 MB is not reachable yet.
-- Windows build is unsigned and not tested by the maintainer.
+- `client`, `channel` and `extension_host` are still linked to the editor core;
+  removing them requires API rework.
+- Windows builds are unsigned.
 - macOS is not built.
 
 ### License and attribution
