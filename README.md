@@ -47,15 +47,22 @@ supported by Zed Industries. See [NOTICE](NOTICE) and [Trademark](#trademark).
 Measured on one machine (Fedora 44, Intel RAPTORLAKE-S, Mesa 26.2.4), fresh
 profile, cold page cache, RSS summed across all editor processes:
 
-| Scenario | Zed 1.26.2 | Zedless 0.1 |
-|---|---:|---:|
-| Idle / welcome | 294 MB (256 + 38 crash helper) | **148 MB** |
-| Open project (20 s) | 296 MB (258 + 38) | **147 MB** |
-| Binary | 220 MB | **188 MB** |
-| `.text` | 155.5 MB | **132.5 MB** |
+| Metric | Zed 1.26.2 | Zedless 0.1 | Orca 1.4.219 |
+|---|---:|---:|---:|
+| Idle / welcome | 294 MB (256 + 38 crash helper) | **148 MB** | 955 MB |
+| Open project (20 s) | 296 MB (258 + 38) | **147 MB** | 955 MB¹ |
+| Editor processes | 2 | **1** | 7 |
+| Binary / install | 220 MB | **188 MB** | 204 MB AppImage |
+| `.text` | 155.5 MB | **132.5 MB** | n/a (Electron) |
 
-Zedless is roughly **2× lighter** than Zed on the same workload. Values vary
-with page-cache state and GPU driver; run `script/zedless-mem` to reproduce.
+¹ Orca has no CLI argument for opening a folder, so its peak equals the startup
+plateau. Orca was measured from an extracted AppImage (AppImageLauncher
+intercepts direct execution) with all Electron processes summed: main 352 MB,
+renderer 207 MB, GPU 181 MB, network service 88 MB, three zygotes ~132 MB.
+
+Zedless is roughly **2× lighter than Zed** and **~6.5× lighter than Orca**
+(~3.2× lighter for Zed vs Orca) on the same workload. Values vary with
+page-cache state and GPU driver; run `script/zedless-mem` to reproduce.
 
 ### Known limitations
 
