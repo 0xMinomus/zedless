@@ -42,27 +42,41 @@ supported by Zed Industries. See [NOTICE](NOTICE) and [Trademark](#trademark).
 | Settings UI, keymaps, themes (built-in) | Extension store and extension auto-install |
 | Local-first: no login, no cloud calls on startup | Crash reporter, telemetry upload, upstream updater |
 
-## Memory benchmark
+## Memory and CPU benchmark
 
-Measured on one machine (Fedora 44, Intel RAPTORLAKE-S, Mesa 26.2.4), fresh
-profile, cold page cache, RSS summed across all editor processes:
+One machine (Fedora 44, Intel RAPTORLAKE-S, Mesa 26.2.4), fresh profile, cold
+page cache, one run per app:
 
 | Metric | Zed 1.26.2 | Zedless 0.1 | Orca 1.4.219 |
 |---|---:|---:|---:|
-| Idle / welcome | 294 MB (256 + 38 crash helper) | **148 MB** | 955 MB |
-| Open project (20 s) | 296 MB (258 + 38) | **147 MB** | 955 MB¹ |
-| Editor processes | 2 | **1** | 7 |
+| **RAM, idle** | 294 MB | **149 MB** | 756 MB |
+| **CPU, idle** | 0.7 % | 1.6 % | 1.4 % |
+| **RAM, project open** | 297 MB | **150 MB** | —¹ |
+| **CPU, project open** (20 s avg) | 16.0 % | **1.4 %** | —¹ |
+| **Peak CPU during launch** | 235 % | **12 %** | 346 % |
+| Processes | 2 | **1** | 7 |
 | Binary / install | 220 MB | **188 MB** | 204 MB AppImage |
 | `.text` | 155.5 MB | **132.5 MB** | n/a (Electron) |
 
-¹ Orca has no CLI argument for opening a folder, so its peak equals the startup
-plateau. Orca was measured from an extracted AppImage (AppImageLauncher
-intercepts direct execution) with all Electron processes summed: main 352 MB,
-renderer 207 MB, GPU 181 MB, network service 88 MB, three zygotes ~132 MB.
+How to read this:
 
-Zedless is roughly **2× lighter than Zed** and **~6.5× lighter than Orca**
-(~3.2× lighter for Zed vs Orca) on the same workload. Values vary with
-page-cache state and GPU driver; run `script/zedless-mem` to reproduce.
+- **RAM** is resident set size (RSS) summed across every process the app owns,
+  not just its main process. Idle is measured 10 s after launch; project is
+  `~/Documents/Alpro` opened for 20 s. Values are cold-page-cache, so warm runs
+  may read 10–18 MB higher.
+- **CPU** is the average share of *one logical core*. It can exceed 100 % when
+  an app uses several threads. Samples are taken every 0.5 s; *peak* is the
+  highest sample during launch.
+- Zed's crash-helper process is included in its RAM total. Language servers run
+  as separate processes and are not counted for any app.
+- Orca has no CLI argument for opening a folder, so its project row is not
+  measured; its launch plateau is 955 MB / 346 % CPU. Orca was run from an
+  extracted AppImage with its whole Electron process tree summed: main 352 MB,
+  renderer 207 MB, GPU 181 MB, network service 88 MB, three zygotes ~132 MB.
+
+Zedless is **~2× lighter than Zed** in RAM and CPU during project work, and
+**~5× lighter than Orca** at idle (~6.5× at Orca's launch plateau). Reproduce
+with `script/zedless-mem`; CPU numbers require a process-tree sampler.
 
 ### Known limitations
 
