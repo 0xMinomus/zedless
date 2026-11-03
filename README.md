@@ -32,6 +32,31 @@ supported by Zed Industries. See [NOTICE](NOTICE) and [Trademark](#trademark).
   The build is unsigned, so SmartScreen will warn on first launch.
 - macOS: not built; the fork is not tested there.
 
+## What changed in 1.0.0
+
+Compared with Zedless 0.1.0:
+
+| Area | 0.1.0 | 1.0.0 |
+|---|---|---|
+| Branding | Zed logo in the UI, Zed app icons | Transparent Zedless logo everywhere, Zedless icons and Windows metadata |
+| First launch | empty `untitled` buffer | welcome page, window titled "Zedless" |
+| Collaboration runtime | `call`/LiveKit/WebRTC and the title-bar call UI still linked | removed from the binary |
+| Startup | authenticated with the collaboration service | fully local: no cloud connection, no font prewarm |
+| Loading cursor | `StartupNotify=true` and duplicate activation tokens | fixed: no lingering launch cursor |
+| Release build | opt-level=z, thin LTO, safe ICF | fat LTO, `panic=abort`, single codegen unit, gc-sections |
+| Idle memory | no page reclaim | clean code pages returned to the OS after ~5 s idle (Linux) |
+
+| Metric | 0.1.0 | 1.0.0 |
+|---|---:|---:|
+| **RAM, idle** | 136 MB | **52 MB** |
+| **RAM, project open** | 157 MB | **65 MB** |
+| Binary | 186.6 MB | **116 MB** |
+| Processes / threads | 1 / 57 | 1 / 58 |
+| CPU, idle | 0.0 % | **0.0 %** |
+
+Both rows use the same machine, fresh profile and cold page cache. The 0.1.0
+numbers were recorded before the idle page reclaim existed.
+
 ## Features
 
 | Kept | Removed |
